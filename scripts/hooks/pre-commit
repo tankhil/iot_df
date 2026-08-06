@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+
+python scripts/git_safety_check.py
+git diff --cached --check
