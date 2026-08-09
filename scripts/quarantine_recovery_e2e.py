@@ -165,6 +165,15 @@ def post_recovery_probe(sequence: int) -> dict[str, Any]:
     )
 
 
+def ensure_e2e_device_purpose() -> None:
+    request_json(
+        "POST",
+        f"/api/admin/devices/{DEVICE_ID}/purpose",
+        payload={"purpose": "e2e", "device_type": DEVICE_TYPE},
+        admin=True,
+    )
+
+
 def count_action(records: list[dict[str, Any]], action: str) -> int:
     return sum(
         1
@@ -259,6 +268,7 @@ def run_sequence() -> dict[str, Any]:
     }
     request_json("GET", "/ready")
     ensure_admin_rejections()
+    ensure_e2e_device_purpose()
     safe_restore()
     wait_for_start_cooldown(deadline)
 

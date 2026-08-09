@@ -10,6 +10,7 @@ from app.models import (
     AuditLog,
     Detection,
     Device,
+    DevicePurpose,
     PolicyDecision,
     QuarantineState,
     ResponseAction,
@@ -23,6 +24,7 @@ from app.schemas.api import (
     AttackSimulationResponse,
     CurrentRiskResponse,
     DeviceDetailResponse,
+    DevicePurposeUpdate,
     DeviceSummary,
     ErrorResponse,
     HealthResponse,
@@ -119,7 +121,7 @@ def ready(db: Session = Depends(get_db)) -> ReadinessResponse:
     response_model=list[DeviceSummary],
 )
 def devices(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    rows = db.scalars(select(Device).order_by(Device.id)).all()
+    rows = db.scalars(select(Device).where(Device.purpose == DevicePurpose.simulated.value).order_by(Device.id)).all()
     return [as_dict(row) for row in rows]
 
 
@@ -193,7 +195,7 @@ def security_events(limit: int = Query(50, ge=1, le=500), offset: int = Query(0,
     response_model=list[CurrentRiskResponse],
 )
 def current_risks(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    devices = db.scalars(select(Device)).all()
+    devices = db.scalars(select(Device).where(Device.purpose == DevicePurpose.simulated.value)).all()
     result = []
     for device in devices:
         risk = db.scalar(select(RiskAssessment).where(RiskAssessment.device_id == device.id).order_by(desc(RiskAssessment.created_at)))
@@ -347,6 +349,44 @@ def manual_restore(
 ) -> dict[str, Any]:
     actions = execute_actions(db, device_id=device_id, actions=["restore_access"], policy_decision=None, actor="admin")
     return {"actions": [as_dict(action) for action in actions], "reason": payload.reason}
+
+
+@router.post(
+    "/api/admin/devices/{device_id}/purpose",
+    tags=["Administration"],
+    summary="Set simulated device purpose",
+    description="Admin-only control to distinguish normal simulated devices from bounded E2E test devices.",
+    response_model=DeviceSummary,
+    responses=COMMON_ERRORS,
+    dependencies=[Depends(require_admin), Depends(sensitive_rate_limit)],
+)
+def set_device_purpose(
+    device_id: str,
+    payload: DevicePurposeUpdate,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    device = db.get(Device, device_id)
+    if not device:
+        device = Device(
+            id=device_id,
+            device_type=payload.device_type,
+            purpose=payload.purpose,
+            allowed_destinations=sorted({"mqtt-broker", "health-check"}),
+        )
+        db.add(device)
+    else:
+        device.purpose = payload.purpose
+    db.add(
+        AuditLog(
+            device_id=device_id,
+            event_type="device.purpose.updated",
+            actor="admin",
+            details={"purpose": payload.purpose, "device_type": device.device_type},
+        )
+    )
+    db.commit()
+    db.refresh(device)
+    return as_dict(device)
 
 
 @router.post(

@@ -13,6 +13,38 @@ from app.models import AuditLog, Device, PolicyDecision, ResponseAction
 from app.response.executor import execute_actions
 
 
+def test_quarantine_e2e_uses_explicit_e2e_device_by_default() -> None:
+    assert quarantine_recovery_e2e.DEVICE_ID == "camera-e2e-01"
+
+
+def test_quarantine_e2e_marks_device_purpose_before_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str, dict[str, object] | None, bool]] = []
+
+    def fake_request(
+        method: str,
+        path: str,
+        *,
+        payload: dict[str, object] | None = None,
+        admin: bool = False,
+        **_kwargs: object,
+    ) -> dict[str, object]:
+        calls.append((method, path, payload, admin))
+        return {}
+
+    monkeypatch.setattr(quarantine_recovery_e2e, "request_json", fake_request)
+
+    quarantine_recovery_e2e.ensure_e2e_device_purpose()
+
+    assert calls == [
+        (
+            "POST",
+            "/api/admin/devices/camera-e2e-01/purpose",
+            {"purpose": "e2e", "device_type": "smart_camera"},
+            True,
+        )
+    ]
+
+
 def test_e2e_overrides_are_rejected_outside_e2e_environment() -> None:
     with pytest.raises(ValueError, match="ENVIRONMENT=e2e"):
         Settings(_env_file=None, e2e_action_cooldown_seconds=1)

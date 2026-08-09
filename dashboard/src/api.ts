@@ -89,8 +89,8 @@ export async function loadDashboardData(timeoutMs = 5000): Promise<DashboardData
     const [riskJson, alertJson, actionJson, auditJson] = await Promise.all([
       fetchJson("/api/risks/current", controller.signal),
       fetchJson("/api/alerts", controller.signal),
-      fetchJson("/api/response-actions?limit=20", controller.signal),
-      fetchJson("/api/audit-logs?limit=20", controller.signal),
+      fetchJson("/api/response-actions?limit=12", controller.signal),
+      fetchJson("/api/audit-logs?limit=12", controller.signal),
     ]);
     return {
       risks: validateRisks(riskJson),

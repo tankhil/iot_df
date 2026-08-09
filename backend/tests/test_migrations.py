@@ -69,6 +69,20 @@ def test_trusted_recovery_migration_adds_observations_and_idempotency() -> None:
     assert "UniqueConstraint(\"idempotency_key\"" in model
 
 
+def test_device_purpose_migration_classifies_legacy_e2e_fixture() -> None:
+    migration = ROOT / "backend" / "alembic" / "versions" / "0004_device_purpose.py"
+    text = migration.read_text(encoding="utf-8")
+    model = (ROOT / "backend" / "app" / "models" / "entities.py").read_text(encoding="utf-8")
+
+    assert 'revision: str = "0004_device_purpose"' in text
+    assert 'down_revision: str | None = "0003_trusted_recovery"' in text
+    assert '"purpose"' in text
+    assert '"ix_devices_purpose"' in text
+    assert "UPDATE devices SET purpose = 'e2e' WHERE id = 'camera-e2e-01'" in text
+    assert "class DevicePurpose" in model
+    assert "purpose: Mapped[str]" in model
+
+
 def test_demo_seed_script_is_idempotent_and_does_not_migrate_schema() -> None:
     seed_script = (ROOT / "scripts" / "seed_demo_data.py").read_text(encoding="utf-8")
     assert "DEMO_SEED_VERSION" in seed_script

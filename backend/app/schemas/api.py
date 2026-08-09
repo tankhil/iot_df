@@ -68,6 +68,11 @@ class RecoveryProbeRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class DevicePurposeUpdate(BaseModel):
+    purpose: str = Field(pattern=r"^(simulated|e2e)$")
+    device_type: str = Field(default="smart_camera", min_length=1, max_length=80)
+
+
 class AttackSimulationResponse(BaseModel):
     status: str
     scenario: SafeAttackScenario | None = None
@@ -96,6 +101,7 @@ class RecoveryProbeResponse(BaseModel):
 class DeviceSummary(BaseModel):
     id: str
     device_type: str
+    purpose: str
     status: str
     allowed_destinations: list[str]
     created_at: str

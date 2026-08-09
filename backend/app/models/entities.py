@@ -30,6 +30,11 @@ class DeviceStatus(str, enum.Enum):
     offline = "offline"
 
 
+class DevicePurpose(str, enum.Enum):
+    simulated = "simulated"
+    e2e = "e2e"
+
+
 class RiskLevel(str, enum.Enum):
     normal = "normal"
     suspicious = "suspicious"
@@ -41,6 +46,7 @@ class Device(Base):
     __tablename__ = "devices"
     id: Mapped[str] = mapped_column(String(80), primary_key=True)
     device_type: Mapped[str] = mapped_column(String(80), index=True)
+    purpose: Mapped[str] = mapped_column(String(40), default=DevicePurpose.simulated.value, index=True)
     status: Mapped[DeviceStatus] = mapped_column(Enum(DeviceStatus), default=DeviceStatus.active)
     allowed_destinations: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
