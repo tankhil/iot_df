@@ -3,7 +3,18 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -76,14 +87,23 @@ class FeatureWindow(Base):
 
 class ModelVersion(Base):
     __tablename__ = "model_versions"
+    __table_args__ = (UniqueConstraint("identity_fingerprint", name="uq_model_versions_identity_fingerprint"),)
+
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(120))
     device_type: Mapped[str] = mapped_column(String(80), default="global", index=True)
     artifact_path: Mapped[str] = mapped_column(String(255))
+    identity_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    feature_schema_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    training_dataset_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    hyperparameters: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    training_code_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    artifact_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     training_rows: Mapped[int] = mapped_column(Integer)
     metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class Detection(Base):

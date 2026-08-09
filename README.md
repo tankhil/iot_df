@@ -73,7 +73,9 @@ docker compose up -d
 make demo
 ```
 
-`make demo` seeds simulated normal traffic, creates feature windows, trains the Isolation Forest model, runs a preliminary evaluation script, and leaves audit/risk/action records for the dashboard.
+`make demo` seeds simulated normal traffic, creates feature windows, trains or reuses fingerprinted Isolation Forest models, runs a preliminary evaluation script, and leaves audit/risk/action records for the dashboard.
+
+Model identity is deterministic. The fingerprint includes model type, global or device-type scope, ordered feature schema and schema version, training-dataset hash, normalized hyperparameters, random seed, training-code version, and artifact format version. Identical fingerprints with valid artifacts are reused. Missing or corrupt artifacts for the same fingerprint are rebuilt atomically and update the same metadata row. Changed data, seed, schema, hyperparameters, model type, or training-code identity creates a new model version.
 
 Safe attack traffic can be published inside the Docker network:
 
@@ -283,7 +285,7 @@ docker compose logs dashboard --tail=200
 
 ## Metrics
 
-`scripts/evaluate_model.py` reports preliminary precision, recall, F1, and false-positive rate from a small reproducible demo set. These are not production-quality claims.
+`scripts/evaluate_model.py` reports preliminary precision, recall, F1, and false-positive rate from a small reproducible synthetic demo set. A synthetic F1 score of `1.0` is a pipeline smoke signal, not production evidence or a real-world model-quality claim.
 
 Prepared metrics:
 

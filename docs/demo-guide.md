@@ -68,9 +68,13 @@ Seed deterministic synthetic telemetry, train Isolation Forest models, and run t
 make demo
 ```
 
-The demo seed is repeatable. A second run should report skipped existing seed records and updated model metadata instead of duplicating the deterministic baseline.
+The demo seed is repeatable. A second run should report skipped existing seed records instead of duplicating the deterministic baseline.
+
+Model training is fingerprinted from the model type, global or device-type scope, ordered feature schema and schema version, deterministic training-dataset hash, normalized hyperparameters, random seed, training-code version, and model artifact format version. If the fingerprint and artifact are unchanged, training reuses the existing `model_versions` row and artifact. If the same fingerprint has a missing or corrupt artifact, training rebuilds the artifact and updates the same metadata row. Changed data, seed, schema, hyperparameters, or training-code identity creates a new model version.
 
 Generated model artifacts are written under `models/` and are intentionally ignored by Git.
+
+The evaluation output is a preliminary synthetic demo signal. An F1 score of `1.0` on the toy dataset is not production evidence and must not be treated as a real-world model-quality claim.
 
 ## Disk Preflight
 

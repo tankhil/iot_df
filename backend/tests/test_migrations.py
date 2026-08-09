@@ -43,6 +43,18 @@ def test_compose_runs_api_only_after_successful_migration() -> None:
     assert "condition: service_completed_successfully" in compose
 
 
+def test_model_identity_migration_adds_unique_fingerprint() -> None:
+    migration = ROOT / "backend" / "alembic" / "versions" / "0002_model_identity_fingerprint.py"
+    text = migration.read_text(encoding="utf-8")
+    model = (ROOT / "backend" / "app" / "models" / "entities.py").read_text(encoding="utf-8")
+
+    assert 'down_revision: str | None = "0001_initial"' in text
+    assert '"identity_fingerprint"' in text
+    assert "uq_model_versions_identity_fingerprint" in text
+    assert "op.create_unique_constraint" in text
+    assert "UniqueConstraint(\"identity_fingerprint\"" in model
+
+
 def test_demo_seed_script_is_idempotent_and_does_not_migrate_schema() -> None:
     seed_script = (ROOT / "scripts" / "seed_demo_data.py").read_text(encoding="utf-8")
     assert "DEMO_SEED_VERSION" in seed_script
