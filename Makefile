@@ -1,23 +1,30 @@
-.PHONY: setup up migrate migration-check train test lint git-safety disk-check disk-usage demo smoke verify down compose-config frontend-build docker-build clean-db-reset
+.PHONY: setup prepare-models up migrate migration-check train test lint git-safety disk-check disk-usage demo smoke verify down compose-config frontend-build docker-build clean-db-reset
 
-setup:
+LOCAL_UID := $(shell id -u)
+LOCAL_GID := $(shell id -g)
+COMPOSE := LOCAL_UID=$(LOCAL_UID) LOCAL_GID=$(LOCAL_GID) docker compose
+
+setup: prepare-models
 	cp -n .env.example .env
 	python3 -m venv .venv
 	.venv/bin/python -m pip install -e 'backend[dev]'
 	cd dashboard && npm install
 
-up:
+prepare-models:
+	mkdir -p models
+
+up: prepare-models
 	$(MAKE) disk-check
-	docker compose up --build
+	$(COMPOSE) up --build
 
 migrate:
-	docker compose run --rm migrate
+	$(COMPOSE) run --rm migrate
 
 migration-check:
-	docker compose run --rm migrate python /workspace/scripts/migration_check.py
+	$(COMPOSE) run --rm migrate python /workspace/scripts/migration_check.py
 
-train:
-	docker compose run --rm api python /workspace/scripts/train_model.py
+train: prepare-models
+	$(COMPOSE) run --rm api python /workspace/scripts/train_model.py
 
 test:
 	.venv/bin/python -m pytest -q backend/tests simulator/tests
@@ -43,13 +50,13 @@ frontend-build:
 	cd dashboard && npm run build
 
 compose-config:
-	docker compose config
+	$(COMPOSE) config
 
-demo:
-	docker compose run --rm migrate
-	docker compose run --rm api python /workspace/scripts/seed_demo_data.py
-	docker compose run --rm api python /workspace/scripts/train_model.py
-	docker compose run --rm api python /workspace/scripts/evaluate_model.py
+demo: prepare-models
+	$(COMPOSE) run --rm migrate
+	$(COMPOSE) run --rm api python /workspace/scripts/seed_demo_data.py
+	$(COMPOSE) run --rm api python /workspace/scripts/train_model.py
+	$(COMPOSE) run --rm api python /workspace/scripts/evaluate_model.py
 
 smoke:
 	ADMIN_API_KEY=$$(grep -E '^ADMIN_API_KEY=' .env | cut -d= -f2-) .venv/bin/python scripts/e2e_smoke_test.py
@@ -59,16 +66,16 @@ verify:
 	$(MAKE) test
 	$(MAKE) lint
 	$(MAKE) frontend-build
-	@if docker compose ps --services --filter status=running 2>/dev/null | grep -q '^api$$'; then \
+	@if $(COMPOSE) ps --services --filter status=running 2>/dev/null | grep -q '^api$$'; then \
 		$(MAKE) migration-check; \
 		$(MAKE) smoke; \
 	else \
 		echo "Skipping runtime checks: Docker stack is not running or Docker is unavailable."; \
 	fi
 
-docker-build:
+docker-build: prepare-models
 	$(MAKE) disk-check
-	docker compose build
+	$(COMPOSE) build
 
 clean-db-reset:
 	@echo "WARNING: this deletes the local PostgreSQL Docker volume and all demo data."

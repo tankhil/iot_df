@@ -142,6 +142,12 @@ make down
 
 `make clean-db-reset` is destructive. It prompts for confirmation and deletes the local PostgreSQL Docker volume and all demo data.
 
+Backend containers run as a non-root application UID/GID. Make targets create the project `models/` directory as the host user and pass the current host IDs to Docker Compose as `LOCAL_UID=$(id -u)` and `LOCAL_GID=$(id -g)`, so generated model artifacts under the `models/` bind mount remain writable on hosts where the user is not UID 1000. If you build backend images directly, provide those values yourself:
+
+```bash
+LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose build migrate api collector simulator
+```
+
 ## Git Safety
 
 Run the staged-file safety check before committing:
@@ -227,7 +233,7 @@ It runs Compose config validation, backend/simulator tests, frontend tests, Ruff
 Runtime verification on a Docker-enabled shell:
 
 ```bash
-docker compose build
+LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose build
 docker compose up -d postgres mosquitto
 make migrate
 make migrate
@@ -243,7 +249,7 @@ Clean database verification deletes local demo data and must be explicit:
 
 ```bash
 make clean-db-reset
-docker compose build --no-cache
+LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose build --no-cache
 docker compose up -d postgres mosquitto
 make migrate
 make migrate

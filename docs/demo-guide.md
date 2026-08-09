@@ -20,6 +20,8 @@ make compose-config
 
 `make setup` creates `.env` from `.env.example`. Keep the admin API key local, do not commit `.env`, and do not paste the key into issues, logs, or screenshots.
 
+The backend image accepts `APP_UID` and `APP_GID` build arguments. Make targets create the project `models/` directory as the host user and pass the current host IDs through Compose as `LOCAL_UID=$(id -u)` and `LOCAL_GID=$(id -g)`, which keeps the `models/` bind mount writable by non-root backend containers on hosts where the user is not UID 1000. If you build directly with Docker Compose, export or prefix those values yourself.
+
 ## Startup Order
 
 Start PostgreSQL and Mosquitto first:

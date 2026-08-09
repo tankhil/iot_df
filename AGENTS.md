@@ -26,6 +26,8 @@
 - `make down`: stop containers without deleting data.
 - `make clean-db-reset`: destructive reset that prompts before deleting the PostgreSQL Docker volume.
 
+Make targets create the project `models/` directory as the host user and pass `LOCAL_UID=$(id -u)` and `LOCAL_GID=$(id -g)` to Docker Compose builds so backend-derived containers run non-root with the host user's numeric IDs and can write generated files under the project `models/` bind mount.
+
 ## Startup Order
 
 Clean local setup:
