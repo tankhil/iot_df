@@ -28,6 +28,7 @@ Python 3.12+, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL, Eclipse Mosquitto, Pah
 
 ```bash
 make setup
+make disk-check
 make compose-config
 docker compose up -d postgres mosquitto
 make migrate
@@ -129,6 +130,7 @@ make train
 make test
 make lint
 make git-safety
+make disk-check
 make frontend-build
 make demo
 make smoke
@@ -162,6 +164,34 @@ git config --unset core.hooksPath
 ```
 
 The hook runs `scripts/git_safety_check.py` and `git diff --cached --check`. It is local Git protection only; configure GitHub branch protection after pushing the repository.
+
+## Disk Safety
+
+Docker builds, especially `docker compose build --no-cache`, can consume several GiB of temporary and cached storage. Keep at least 8 GiB free on both the project filesystem and Docker data filesystem before Docker-heavy verification.
+
+Run the non-destructive preflight:
+
+```bash
+make disk-check
+```
+
+The checker uses Python `shutil.disk_usage`, reports total/used/free space and percentage, fails below 5 GiB free, warns from 5 GiB to under 8 GiB, and passes at 8 GiB or more. It does not delete anything. `scripts/foundation_runtime_verify.py` runs this preflight before Docker clean/build/runtime work.
+
+For diagnostics only:
+
+```bash
+make disk-usage
+```
+
+This may print `df -h`, `docker system df`, and project directory size summaries. It does not prune or delete anything.
+
+Manual cleanup candidates, when you choose to run them yourself:
+
+- `docker system df`: shows Docker image, container, volume, and build-cache usage.
+- `docker builder prune`: deletes unused Docker build cache only.
+- `docker image prune`: deletes dangling untagged Docker images only.
+- `docker system prune`: deletes stopped containers, unused networks, dangling images, and build cache; it does not delete volumes unless `--volumes` is added.
+- `docker volume prune`: deletes all unused local Docker volumes, including database volumes from other projects if they are unused.
 
 ## Dashboard Troubleshooting
 

@@ -1,4 +1,4 @@
-.PHONY: setup up migrate migration-check train test lint git-safety demo smoke verify down compose-config frontend-build docker-build clean-db-reset
+.PHONY: setup up migrate migration-check train test lint git-safety disk-check disk-usage demo smoke verify down compose-config frontend-build docker-build clean-db-reset
 
 setup:
 	cp -n .env.example .env
@@ -7,6 +7,7 @@ setup:
 	cd dashboard && npm install
 
 up:
+	$(MAKE) disk-check
 	docker compose up --build
 
 migrate:
@@ -29,6 +30,14 @@ lint:
 
 git-safety:
 	.venv/bin/python scripts/git_safety_check.py
+
+disk-check:
+	.venv/bin/python scripts/disk_preflight.py
+
+disk-usage:
+	df -h . /var/lib/docker 2>/dev/null || df -h .
+	docker system df 2>/dev/null || true
+	du -sh backend dashboard docs models scripts simulator . 2>/dev/null || true
 
 frontend-build:
 	cd dashboard && npm run build
@@ -58,6 +67,7 @@ verify:
 	fi
 
 docker-build:
+	$(MAKE) disk-check
 	docker compose build
 
 clean-db-reset:

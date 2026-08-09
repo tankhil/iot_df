@@ -14,6 +14,7 @@ Create local configuration and install dependencies:
 
 ```bash
 make setup
+make disk-check
 make compose-config
 ```
 
@@ -68,6 +69,32 @@ make demo
 The demo seed is repeatable. A second run should report skipped existing seed records and updated model metadata instead of duplicating the deterministic baseline.
 
 Generated model artifacts are written under `models/` and are intentionally ignored by Git.
+
+## Disk Preflight
+
+Docker-heavy verification can consume several GiB, especially when building images without cache. Keep at least 8 GiB free on both the project filesystem and Docker data filesystem.
+
+Run the non-destructive disk preflight before Docker-heavy work:
+
+```bash
+make disk-check
+```
+
+The preflight uses Python `shutil.disk_usage`, reports total, used, free, and percentage for the project filesystem and Docker data filesystem when Docker is accessible. It fails below 5 GiB free, warns from 5 GiB to under 8 GiB, and passes at 8 GiB or more. It never deletes files, images, containers, build cache, or volumes.
+
+For diagnostic output only:
+
+```bash
+make disk-usage
+```
+
+Manual cleanup candidates, when you decide cleanup is appropriate:
+
+- `docker system df`: shows Docker image, container, volume, and build-cache usage.
+- `docker builder prune`: deletes unused Docker build cache only.
+- `docker image prune`: deletes dangling untagged Docker images only.
+- `docker system prune`: deletes stopped containers, unused networks, dangling images, and build cache; it does not delete volumes unless `--volumes` is added.
+- `docker volume prune`: deletes all unused local Docker volumes, including database volumes from other projects if they are unused.
 
 ## Safe Attack Simulation
 

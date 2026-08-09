@@ -315,6 +315,7 @@ def main() -> int:
 
     evidence: dict[str, Any] = {}
     try:
+        run_command("disk preflight", [sys.executable, str(ROOT / "scripts" / "disk_preflight.py")], timeout=120)
         run_command("docker info", ["docker", "info"], timeout=120)
         if args.clean:
             require_clean_confirmation()
