@@ -63,6 +63,11 @@ class ManualOverride(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class RecoveryProbeRequest(BaseModel):
+    idempotency_key: str = Field(min_length=8, max_length=120, pattern=r"^[A-Za-z0-9_.:-]+$")
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class AttackSimulationResponse(BaseModel):
     status: str
     scenario: SafeAttackScenario | None = None
@@ -75,6 +80,17 @@ class AttackSimulationResponse(BaseModel):
 class ManualOverrideResponse(BaseModel):
     actions: list[dict[str, Any]]
     reason: str
+
+
+class RecoveryProbeResponse(BaseModel):
+    created: bool
+    reused: bool
+    skipped: str | None = None
+    trusted_recovery_count: int | None = None
+    observation: dict[str, Any] | None = None
+    risk: dict[str, Any] | None = None
+    policy: dict[str, Any] | None = None
+    actions: list[dict[str, Any]]
 
 
 class DeviceSummary(BaseModel):

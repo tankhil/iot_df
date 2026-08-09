@@ -135,6 +135,18 @@ make verify
 
 If the Docker stack is running, `make verify` also runs the migration head check and E2E smoke test. If the stack is not running, start it before relying on runtime results.
 
+To prove the full simulated quarantine and automatic recovery path against a running local stack:
+
+```bash
+make smoke-quarantine
+```
+
+This bounded E2E check uses one simulated device, starts one allow-listed safe attack through the authenticated API, submits project-local attack telemetry through public API boundaries, verifies exactly one automatic simulated quarantine, then submits three authenticated control-plane recovery probes before exactly one automatic restore. Ordinary MQTT or public API telemetry cannot mark a recovery observation trusted. The check never recreates containers, deletes volumes, changes host firewall rules, or contacts external targets.
+
+The intended state machine is:
+
+`normal/active -> suspicious/high/critical -> quarantine pending -> quarantined -> recovery observation -> restored/active`
+
 ## Shutdown
 
 Stop containers without deleting demo data:

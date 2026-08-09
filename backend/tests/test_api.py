@@ -66,6 +66,7 @@ def test_protected_endpoints_declare_api_key_security() -> None:
         "/api/simulations/attacks/{scenario}/stop",
         "/api/admin/devices/{device_id}/quarantine",
         "/api/admin/devices/{device_id}/restore",
+        "/api/admin/devices/{device_id}/recovery-probe",
     ]
     for path in protected_paths:
         assert document["paths"][path]["post"]["security"] == [{"APIKeyHeader": []}]

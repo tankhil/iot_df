@@ -1,4 +1,4 @@
-.PHONY: setup prepare-models up migrate migration-check train test lint git-safety disk-check disk-usage demo smoke verify down compose-config frontend-build docker-build clean-db-reset
+.PHONY: setup prepare-models up migrate migration-check train test lint git-safety disk-check disk-usage demo smoke smoke-quarantine verify down compose-config frontend-build docker-build clean-db-reset
 
 LOCAL_UID := $(shell id -u)
 LOCAL_GID := $(shell id -g)
@@ -60,6 +60,14 @@ demo: prepare-models
 
 smoke:
 	ADMIN_API_KEY=$$(grep -E '^ADMIN_API_KEY=' .env | cut -d= -f2-) .venv/bin/python scripts/e2e_smoke_test.py
+
+smoke-quarantine:
+	$(MAKE) disk-check
+	@if ! $(COMPOSE) ps --services --filter status=running 2>/dev/null | grep -q '^api$$'; then \
+		echo "API service must be running before smoke-quarantine."; \
+		exit 1; \
+	fi
+	ADMIN_API_KEY=$$(grep -E '^ADMIN_API_KEY=' .env | cut -d= -f2-) timeout 300 .venv/bin/python scripts/quarantine_recovery_e2e.py
 
 verify:
 	$(MAKE) compose-config

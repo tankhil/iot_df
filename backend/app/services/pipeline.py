@@ -4,6 +4,7 @@ from pathlib import Path
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.detection.isolation_forest import load_model, safe_fallback_detection
 from app.features.extraction import EventLike, extract_features
 from app.models import (
@@ -14,6 +15,7 @@ from app.models import (
     ModelVersion,
     PolicyDecision,
     QuarantineState,
+    ResponseAction,
     RiskAssessment,
     RiskLevel,
     SecurityEvent,
@@ -24,6 +26,7 @@ from app.response.executor import execute_actions
 from app.risk.engine import calculate_risk
 from app.schemas.api import TelemetryIn
 from app.services.audit import audit
+from app.services.recovery import completed_quarantine_action_for_state, trusted_recovery_count
 
 ALLOWED_DESTINATIONS = {"mqtt-broker", "health-check"}
 
@@ -148,6 +151,7 @@ def run_detection_cycle(db: Session, *, device_id: str, window_seconds: int = 60
     detection_result = safe_fallback_detection()
     if model_version and Path(model_version.artifact_path).exists():
         detection_result = load_model(model_version.artifact_path).predict_one(feature_values)
+    quarantine = db.scalar(select(QuarantineState).where(QuarantineState.device_id == device_id, QuarantineState.active.is_(True)))
     detection = Detection(
         device_id=device_id,
         feature_window_id=window.id,
@@ -159,6 +163,7 @@ def run_detection_cycle(db: Session, *, device_id: str, window_seconds: int = 60
     db.add(detection)
     db.flush()
     recent_high = _recent_high_count(db, device_id=device_id)
+    recent_low = _recent_low_count(db, device_id=device_id)
     risk = calculate_risk(
         device_id=device_id,
         anomaly_score=detection.anomaly_score,
@@ -174,15 +179,29 @@ def run_detection_cycle(db: Session, *, device_id: str, window_seconds: int = 60
     )
     db.add(assessment)
     db.flush()
-    quarantine = db.scalar(select(QuarantineState).where(QuarantineState.device_id == device_id, QuarantineState.active.is_(True)))
     last_action_at = db.scalar(
-        select(func.max(PolicyDecision.created_at)).where(PolicyDecision.device_id == device_id)
+        select(func.max(ResponseAction.created_at)).where(
+            ResponseAction.device_id == device_id,
+            ResponseAction.action.in_(["temporary_quarantine", "restore_access"]),
+        )
     )
+    minimum_quarantine_elapsed = True
+    has_completed_quarantine_action = True
+    recovery_low_count = recent_low + (1 if assessment.risk_score < get_settings().restore_risk_threshold else 0)
+    if quarantine:
+        minimum_quarantine_elapsed = (now - _as_utc(quarantine.started_at)).total_seconds() >= get_settings().minimum_quarantine_seconds
+        has_completed_quarantine_action = (
+            completed_quarantine_action_for_state(db, device_id=device_id, quarantine=quarantine) is not None
+        )
+        recovery_low_count = trusted_recovery_count(db, quarantine=quarantine)
     context = PolicyContext(
         device_id=device_id,
         risk_score=assessment.risk_score,
         consecutive_high_count=recent_high + (1 if assessment.level in {RiskLevel.high, RiskLevel.critical} else 0),
         currently_quarantined=bool(quarantine),
+        consecutive_low_count=recovery_low_count,
+        minimum_quarantine_elapsed=minimum_quarantine_elapsed,
+        has_completed_quarantine_action=has_completed_quarantine_action,
         quarantine_expires_at=quarantine.expires_at if quarantine else None,
         last_action_at=last_action_at,
     )
@@ -195,7 +214,22 @@ def run_detection_cycle(db: Session, *, device_id: str, window_seconds: int = 60
     )
     db.add(decision)
     db.flush()
-    audit(db, "policy.decision", device_id=device_id, details={"actions": policy.actions, "risk": assessment.risk_score})
+    audit(
+        db,
+        "policy.decision",
+        device_id=device_id,
+        details={
+            "policy_decision_id": decision.id,
+            "risk_assessment_id": assessment.id,
+            "actions": policy.actions,
+            "rationale": policy.rationale,
+            "risk": assessment.risk_score,
+            "risk_level": assessment.level.value,
+            "risk_reasons": assessment.reasons,
+            "consecutive_high_count": context.consecutive_high_count,
+            "consecutive_low_count": context.consecutive_low_count,
+        },
+    )
     execute_actions(db, device_id=device_id, actions=policy.actions, policy_decision=decision)
     db.refresh(assessment)
     return assessment
@@ -233,6 +267,25 @@ def _recent_high_count(db: Session, *, device_id: str) -> int:
     return count
 
 
+def _recent_low_count(db: Session, *, device_id: str) -> int:
+    settings = get_settings()
+    rows = list(
+        db.scalars(
+            select(RiskAssessment)
+            .where(RiskAssessment.device_id == device_id)
+            .order_by(desc(RiskAssessment.created_at))
+            .limit(settings.recovery_healthy_required)
+        )
+    )
+    count = 0
+    for row in rows:
+        if row.risk_score < settings.restore_risk_threshold:
+            count += 1
+        else:
+            break
+    return count
+
+
 def _active_model(db: Session, device_type: str) -> ModelVersion | None:
     device_type_model = db.scalar(
         select(ModelVersion)
@@ -246,3 +299,9 @@ def _active_model(db: Session, device_type: str) -> ModelVersion | None:
         .where(ModelVersion.active.is_(True), ModelVersion.device_type == "global")
         .order_by(desc(ModelVersion.created_at))
     )
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

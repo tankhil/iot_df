@@ -141,6 +141,8 @@ class PolicyDecision(Base):
 
 class ResponseAction(Base):
     __tablename__ = "response_actions"
+    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_response_actions_idempotency_key"),)
+
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     device_id: Mapped[str] = mapped_column(String(80), index=True)
     policy_decision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -162,6 +164,22 @@ class QuarantineState(Base):
     reason: Mapped[str] = mapped_column(Text)
     restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     transitions: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+
+
+class RecoveryObservation(Base):
+    __tablename__ = "recovery_observations"
+    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_recovery_observations_idempotency_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    device_id: Mapped[str] = mapped_column(String(80), index=True)
+    quarantine_state_id: Mapped[str] = mapped_column(String(36), index=True)
+    policy_decision_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    source: Mapped[str] = mapped_column(String(80), index=True)
+    healthy: Mapped[bool] = mapped_column(Boolean, default=True)
+    risk_score: Mapped[int] = mapped_column(Integer)
+    details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    idempotency_key: Mapped[str] = mapped_column(String(160), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
 class AuditLog(Base):

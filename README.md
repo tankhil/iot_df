@@ -118,8 +118,13 @@ Default policy:
 - 30-59: create alert and increase monitoring
 - 60-79: create alert and simulated rate limiting
 - 80-100 with 3 consecutive high-risk assessments: temporary quarantine
+- Quarantined devices require minimum quarantine duration, a completed simulated quarantine action, action cooldown, and 3 consecutive trusted low-risk recovery observations before simulated restore
 
-Quarantine is simulated at the application/MQTT-processing layer. No host firewall rules are changed.
+State machine:
+
+`normal/active -> suspicious/high/critical -> quarantine pending -> quarantined -> recovery observation -> restored/active`
+
+Quarantine is simulated at the application/MQTT-processing layer. No host firewall rules are changed, no `iptables` or `nftables` commands are run, and no real device commands are issued. Health-check telemetry from MQTT or the public telemetry API is treated as ordinary untrusted telemetry; it cannot mark itself trusted or advance automatic recovery. Trusted recovery observations are created only by the authenticated control-plane recovery probe and are idempotency-keyed so replay does not count twice. E2E-only policy overrides are accepted only when `ENVIRONMENT=e2e`; passing E2E mode is test evidence for the simulated policy path, not proof of production network enforcement.
 
 ## Commands
 
@@ -136,6 +141,7 @@ make disk-check
 make frontend-build
 make demo
 make smoke
+make smoke-quarantine
 make verify
 make down
 ```
@@ -244,6 +250,7 @@ make demo
 make demo
 make migration-check
 make smoke
+make smoke-quarantine
 docker compose ps
 ```
 

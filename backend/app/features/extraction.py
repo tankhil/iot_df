@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from math import isfinite
 from statistics import mean, pstdev
 from typing import Any
@@ -42,13 +42,15 @@ def extract_features(
     allowed_topic_prefixes: tuple[str, ...] = ("iot/",),
     baseline_messages_per_minute: float | None = None,
 ) -> dict[str, float]:
+    window_start = _as_utc(window_start)
+    window_end = _as_utc(window_end)
     if window_end <= window_start:
         raise ValueError("window_end must be after window_start")
 
     allowed_destinations = allowed_destinations or {"mqtt-broker"}
     ordered = sorted(
-        [event for event in events if window_start <= event.timestamp <= window_end],
-        key=lambda event: event.timestamp,
+        [event for event in events if window_start <= _as_utc(event.timestamp) <= window_end],
+        key=lambda event: _as_utc(event.timestamp),
     )
     duration_seconds = max((window_end - window_start).total_seconds(), 1.0)
     duration_minutes = duration_seconds / 60.0
@@ -63,7 +65,7 @@ def extract_features(
     messages_per_minute = count / duration_minutes
     baseline = baseline_messages_per_minute if baseline_messages_per_minute and baseline_messages_per_minute > 0 else messages_per_minute
     traffic_change_ratio = 0.0 if baseline <= 0 else max(0.0, (messages_per_minute - baseline) / baseline)
-    last_message = ordered[-1].timestamp if ordered else window_start
+    last_message = _as_utc(ordered[-1].timestamp) if ordered else window_start
     time_since_last = max(0.0, (window_end - last_message).total_seconds())
 
     features = {
@@ -83,3 +85,9 @@ def extract_features(
 
 def features_to_vector(features: dict[str, Any]) -> list[float]:
     return [_safe_float(float(features.get(name, 0.0) or 0.0)) for name in FEATURE_NAMES]
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

@@ -115,6 +115,17 @@ def test_checker_and_tests_can_be_staged_safely(tmp_path: Path) -> None:
     assert result.stderr == ""
 
 
+def test_quarantine_recovery_e2e_can_be_staged_safely(tmp_path: Path) -> None:
+    result = run_checker_in_repo(
+        tmp_path,
+        {"scripts/quarantine_recovery_e2e.py": (ROOT / "scripts" / "quarantine_recovery_e2e.py").read_bytes()},
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
 def test_other_staged_file_with_private_key_header_is_rejected(tmp_path: Path) -> None:
     header = b"-----BEGIN " + b"PRIVATE " + b"KEY-----"
     result = run_checker_in_repo(

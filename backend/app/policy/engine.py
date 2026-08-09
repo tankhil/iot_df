@@ -21,6 +21,9 @@ class PolicyContext:
     risk_score: int
     consecutive_high_count: int
     currently_quarantined: bool
+    consecutive_low_count: int = 0
+    minimum_quarantine_elapsed: bool = True
+    has_completed_quarantine_action: bool = True
     last_action_at: datetime | None = None
     quarantine_expires_at: datetime | None = None
 
@@ -35,14 +38,29 @@ def choose_policy(context: PolicyContext, *, now: datetime | None = None) -> Pol
     settings = get_settings()
     now = now or datetime.now(UTC)
     if context.last_action_at:
-        elapsed = (now - context.last_action_at).total_seconds()
+        elapsed = (_as_utc(now) - _as_utc(context.last_action_at)).total_seconds()
         if elapsed < settings.action_cooldown_seconds:
             return PolicyResult(["monitor"], "Action cooldown active; monitoring only")
 
     if context.currently_quarantined:
         if context.risk_score < settings.restore_risk_threshold:
-            return PolicyResult(["restore_access"], "Risk is below restore threshold")
-        if context.quarantine_expires_at and now >= context.quarantine_expires_at:
+            if not context.has_completed_quarantine_action:
+                return PolicyResult(["retain_quarantine"], "Recovery blocked until simulated quarantine action completes")
+            if not context.minimum_quarantine_elapsed:
+                return PolicyResult(
+                    ["retain_quarantine", "schedule_health_check"],
+                    "Recovery blocked until minimum quarantine duration elapses",
+                )
+            if context.consecutive_low_count >= settings.recovery_healthy_required:
+                return PolicyResult(
+                    ["restore_access"],
+                    "Trusted recovery observations are below restore threshold for required consecutive windows",
+                )
+            return PolicyResult(
+                ["retain_quarantine", "schedule_health_check"],
+                "Trusted recovery observation is below restore threshold; waiting for consecutive confirmation",
+            )
+        if context.quarantine_expires_at and _as_utc(now) >= _as_utc(context.quarantine_expires_at):
             return PolicyResult(["retain_quarantine", "schedule_health_check"], "Risk remains elevated after quarantine interval")
         return PolicyResult(["retain_quarantine"], "Device remains quarantined pending re-evaluation")
 
@@ -67,3 +85,9 @@ def quarantine_expiry(now: datetime | None = None) -> tuple[datetime, datetime]:
         now + timedelta(seconds=settings.quarantine_duration_seconds),
         now + timedelta(seconds=settings.quarantine_max_seconds),
     )
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)

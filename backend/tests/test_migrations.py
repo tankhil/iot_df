@@ -55,6 +55,20 @@ def test_model_identity_migration_adds_unique_fingerprint() -> None:
     assert "UniqueConstraint(\"identity_fingerprint\"" in model
 
 
+def test_trusted_recovery_migration_adds_observations_and_idempotency() -> None:
+    migration = ROOT / "backend" / "alembic" / "versions" / "0003_trusted_recovery_observations.py"
+    text = migration.read_text(encoding="utf-8")
+    model = (ROOT / "backend" / "app" / "models" / "entities.py").read_text(encoding="utf-8")
+
+    assert 'revision: str = "0003_trusted_recovery"' in text
+    assert 'down_revision: str | None = "0002_model_identity_fingerprint"' in text
+    assert '"recovery_observations"' in text
+    assert "uq_recovery_observations_idempotency_key" in text
+    assert "uq_response_actions_idempotency_key" in text
+    assert "class RecoveryObservation" in model
+    assert "UniqueConstraint(\"idempotency_key\"" in model
+
+
 def test_demo_seed_script_is_idempotent_and_does_not_migrate_schema() -> None:
     seed_script = (ROOT / "scripts" / "seed_demo_data.py").read_text(encoding="utf-8")
     assert "DEMO_SEED_VERSION" in seed_script

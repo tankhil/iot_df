@@ -30,12 +30,15 @@ from app.schemas.api import (
     ManualOverrideResponse,
     Page,
     ReadinessResponse,
+    RecoveryProbeRequest,
+    RecoveryProbeResponse,
     RootResponse,
     SafeAttackScenario,
     TelemetryCreateResponse,
     TelemetryIn,
 )
 from app.services.pipeline import ingest_telemetry, run_detection_cycle
+from app.services.recovery import record_trusted_recovery_probe
 
 router = APIRouter()
 
@@ -344,3 +347,30 @@ def manual_restore(
 ) -> dict[str, Any]:
     actions = execute_actions(db, device_id=device_id, actions=["restore_access"], policy_decision=None, actor="admin")
     return {"actions": [as_dict(action) for action in actions], "reason": payload.reason}
+
+
+@router.post(
+    "/api/admin/devices/{device_id}/recovery-probe",
+    tags=["Administration"],
+    summary="Submit a trusted simulated recovery probe",
+    description=(
+        "Admin-only control-plane probe for simulated recovery verification. "
+        "Public telemetry and MQTT payloads cannot mark recovery observations trusted."
+    ),
+    response_model=RecoveryProbeResponse,
+    responses=COMMON_ERRORS | {404: {"model": ErrorResponse, "description": "Device was not found"}},
+    dependencies=[Depends(require_admin), Depends(sensitive_rate_limit)],
+)
+def trusted_recovery_probe(
+    device_id: str,
+    payload: RecoveryProbeRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if not db.get(Device, device_id):
+        raise HTTPException(status_code=404, detail="Device not found")
+    return record_trusted_recovery_probe(
+        db,
+        device_id=device_id,
+        idempotency_key=payload.idempotency_key,
+        actor="admin",
+    )
