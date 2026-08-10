@@ -24,8 +24,8 @@ def test_backend_dockerfile_uses_portable_non_root_user_args() -> None:
     assert "ARG APP_UID=1000" in dockerfile
     assert "ARG APP_GID=1000" in dockerfile
     assert (
-        "FROM python:3.12.12-slim-bookworm@sha256:"
-        "593bd06efe90efa80dc4eee3948be7c0fde4134606dd40d8dd8dbcade98e669c"
+        "FROM python:3.12.13-slim-bookworm@sha256:"
+        "4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2"
     ) in dockerfile
     assert "apt-get upgrade" not in dockerfile
     assert "useradd --create-home --uid 1000" not in dockerfile
