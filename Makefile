@@ -1,14 +1,24 @@
-.PHONY: setup prepare-models up migrate migration-check train test lint git-safety disk-check disk-usage demo smoke smoke-quarantine verify down compose-config frontend-build docker-build clean-db-reset
+.PHONY: setup prepare-models python-lock dependency-lock-check up migrate migration-check train test lint git-safety disk-check disk-usage demo smoke smoke-quarantine verify down compose-config frontend-build docker-build clean-db-reset
 
 LOCAL_UID := $(shell id -u)
 LOCAL_GID := $(shell id -g)
 COMPOSE := LOCAL_UID=$(LOCAL_UID) LOCAL_GID=$(LOCAL_GID) docker compose
+UV_CACHE_DIR ?= /tmp/iot-df-uv-cache
 
 setup: prepare-models
 	cp -n .env.example .env
 	python3 -m venv .venv
-	.venv/bin/python -m pip install -e 'backend[dev]'
+	.venv/bin/python -m pip install --require-hashes -r backend/requirements-dev.lock
+	.venv/bin/python -m pip install --no-build-isolation --no-deps -e backend
 	cd dashboard && npm install
+
+python-lock:
+	UV_CACHE_DIR=$(UV_CACHE_DIR) UV_PYTHON_DOWNLOADS=never uv --quiet pip compile backend/pyproject.toml --python-version 3.12 --universal --generate-hashes --output-file backend/requirements.lock --custom-compile-command "make python-lock"
+	UV_CACHE_DIR=$(UV_CACHE_DIR) UV_PYTHON_DOWNLOADS=never uv --quiet pip compile backend/build-requirements.in --python-version 3.12 --universal --generate-hashes --output-file backend/build-requirements.lock --custom-compile-command "make python-lock"
+	UV_CACHE_DIR=$(UV_CACHE_DIR) UV_PYTHON_DOWNLOADS=never uv --quiet pip compile backend/pyproject.toml backend/build-requirements.in --extra dev --python-version 3.12 --universal --generate-hashes --output-file backend/requirements-dev.lock --custom-compile-command "make python-lock"
+
+dependency-lock-check:
+	.venv/bin/python scripts/check_python_lock.py
 
 prepare-models:
 	mkdir -p models
@@ -71,6 +81,7 @@ smoke-quarantine:
 
 verify:
 	$(MAKE) compose-config
+	$(MAKE) dependency-lock-check
 	$(MAKE) test
 	$(MAKE) lint
 	$(MAKE) frontend-build

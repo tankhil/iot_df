@@ -1,7 +1,8 @@
-FROM python:3.12.6-slim-bookworm
+FROM python:3.12.12-slim-bookworm@sha256:593bd06efe90efa80dc4eee3948be7c0fde4134606dd40d8dd8dbcade98e669c
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONPATH=/workspace/backend:/workspace:/app
 
 WORKDIR /workspace
@@ -16,8 +17,13 @@ RUN set -eux; \
     useradd --create-home --uid "${APP_UID}" --gid "${APP_GID}" --shell /usr/sbin/nologin appuser; \
     mkdir -p /app/models; \
     chown -R "${APP_UID}:${APP_GID}" /app/models
+COPY backend/requirements.lock /workspace/backend/requirements.lock
+RUN python -m pip install --no-cache-dir --require-hashes -r /workspace/backend/requirements.lock
+COPY backend/build-requirements.lock /workspace/backend/build-requirements.lock
+RUN python -m pip install --no-cache-dir --require-hashes -r /workspace/backend/build-requirements.lock
 COPY backend /workspace/backend
-RUN pip install --no-cache-dir "/workspace/backend[dev]"
+RUN python -m pip install --no-cache-dir --no-build-isolation --no-deps /workspace/backend; \
+    python -m pip uninstall -y setuptools
 COPY simulator /workspace/simulator
 COPY scripts /workspace/scripts
 WORKDIR /workspace/backend

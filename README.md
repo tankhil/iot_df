@@ -50,6 +50,7 @@ URLs:
 - [Data Flow](docs/data-flow.md): telemetry ingestion through response/audit records.
 - [Threat Model](docs/threat-model.md): defensive scope and security assumptions.
 - [ML Evaluation](docs/ml-evaluation.md): preliminary metric definitions and limitations.
+- [Dependency Security Review](docs/dependency-security-review.md): Python locks, action pins, Docker digests, and OS vulnerability policy.
 - [Contributing](CONTRIBUTING.md): local workflow, checks, and security reporting.
 
 ## Admin Authentication
@@ -150,7 +151,13 @@ make down
 
 `make clean-db-reset` is destructive. It prompts for confirmation and deletes the local PostgreSQL Docker volume and all demo data.
 
-Backend containers run as a non-root application UID/GID. Make targets create the project `models/` directory as the host user and pass the current host IDs to Docker Compose as `LOCAL_UID=$(id -u)` and `LOCAL_GID=$(id -g)`, so generated model artifacts under the `models/` bind mount remain writable on hosts where the user is not UID 1000. If you build backend images directly, provide those values yourself:
+Backend containers run as a non-root application UID/GID. Make targets create the project `models/` directory as the host user and pass the current host IDs to Docker Compose as `LOCAL_UID=$(id -u)` and `LOCAL_GID=$(id -g)`, so generated model artifacts under the `models/` bind mount remain writable on hosts where the user is not UID 1000. Backend runtime images install only production dependencies; tests, linting, type checks, and audits run from the local/CI development environment.
+
+Backend images install Python dependencies from the committed hash-pinned runtime lock, install the local backend package with dependency resolution disabled, and remove the temporary build backend from the final image. Regenerate Python locks with `make python-lock`, and check stale or missing locks with `make dependency-lock-check`.
+
+The dashboard image is a multi-stage build. Node/Vite are used only in the build stage, and the final image serves the compiled static bundle with BusyBox `httpd` as UID/GID `10002`. The final dashboard image must not run `vite`, `vite preview`, `npm run dev`, or `npm run preview`.
+
+If you build backend images directly, provide host IDs yourself:
 
 ```bash
 LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose build migrate api collector simulator
@@ -286,9 +293,21 @@ docker compose logs dashboard --tail=200
 | Dashboard is blank | API unavailable, stale dashboard image, or static asset failure | `curl -i http://localhost:5173` and dashboard logs | Rebuild dashboard and verify `VITE_API_URL=http://localhost:8000` |
 | `make demo` repeats data unexpectedly | Seed marker missing or database reset | `docker compose run --rm api python /workspace/scripts/seed_demo_data.py` | Re-run `make demo`; output reports created/updated/skipped |
 
-## Dependency Advisories
+## Dependency Security
 
-`npm audit` currently reports Vite/esbuild-related advisories through the dev-server/test toolchain. The suggested remediation requires `npm audit fix --force` and a breaking Vite major upgrade, so it is intentionally not applied in this foundation hardening pass. Production dashboard assets are built and served with `vite preview`; do not expose the Vite dev server beyond local demo use.
+Run dependency audits before merging dependency, Docker, or CI changes:
+
+```bash
+make dependency-lock-check
+pip-audit -r backend/requirements.lock
+pip-audit --local --skip-editable
+cd dashboard && npm audit --omit=dev --audit-level=moderate
+cd dashboard && npm audit --audit-level=moderate
+```
+
+Classify findings as runtime or development-only. Runtime findings affect the API, collector, simulator, dashboard static server, Docker base images, or GitHub Actions and should be remediated with the smallest compatible update. Development-only findings affect test, lint, local build, or preview tooling; remediate compatible fixes, and document any major-version migration need before taking breaking upgrades.
+
+Do not use forced npm audit remediation. Keep lockfiles in sync with manifest changes, do not hide vulnerable packages by moving dependency groups, and do not suppress advisories without documenting exploitability and follow-up ownership. Dependabot is configured for pip, npm, Docker, and GitHub Actions. Current Docker scanner policy and reviewed OS findings are documented in [Dependency Security Review](docs/dependency-security-review.md).
 
 ## Metrics
 

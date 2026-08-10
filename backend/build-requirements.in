@@ -1,0 +1,2 @@
+# Build backend for installing the local project with --no-build-isolation.
+setuptools>=68
